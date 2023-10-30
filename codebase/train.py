@@ -8,6 +8,7 @@ from codebase import utils as ut
 from torch import nn, optim
 from torch.nn import functional as F
 from torchvision.utils import save_image
+import matplotlib.pyplot as plt
 
 def train(model, train_loader, labeled_subset, device, tqdm, writer,
           iter_max=np.inf, iter_save=np.inf,
@@ -49,6 +50,40 @@ def train(model, train_loader, labeled_subset, device, tqdm, writer,
                     yu = yu.new(np.eye(10)[yu]).to(device).float()
                     loss, summaries = model.loss(xu, yu)
 
+                    if (i % 10000 == 0):
+                        # check the current output
+                        # generate 20 latent variables
+                        model.eval()
+
+                        def plot_images_grid(images, height=10, width=20, save_path=None):
+                            plt.figure(figsize=(20, 10))
+
+                            for idx, image in enumerate(images):
+                                plt.subplot(height, width, idx+1)
+                                plt.imshow(image) 
+                                plt.axis('off')
+
+                            plt.tight_layout()                            
+                            plt.show(block=True)
+
+                        with torch.no_grad():
+                            z = model.sample_z(20)
+                            y = np.repeat(np.arange(10), z.size(0))
+                            y = z.new(np.eye(10)[y])
+                            z = ut.duplicate(z, 10)
+
+                            x_yz_m = model.compute_mean_given(z, y)
+
+                            print(xu.shape)
+                            print(f'z: {z.shape}')
+                            print(f'x_yz_m: {x_yz_m.shape}')
+                            clipped_images = torch.clamp(x_yz_m, min=0, max=1)
+                            clipped_images = clipped_images.reshape(200, 3, 32, 32).detach().numpy()
+                            clipped_images = np.transpose(clipped_images, (0, 2, 3, 1))
+                            plot_images_grid(clipped_images)
+
+                        model.train()
+
                 loss.backward()
                 optimizer.step()
 
@@ -63,7 +98,8 @@ def train(model, train_loader, labeled_subset, device, tqdm, writer,
                 elif y_status == 'fullsup':
                     pbar.set_postfix(
                         loss='{:.2e}'.format(loss),
-                        kl='{:.2e}'.format(summaries['gen/kl_z']))
+                        kl='{:.2e}'.format(summaries['gen/kl_z']),
+                        rec='{:.2e}'.format(summaries['gen/rec']))
                 pbar.update(1)
 
                 # Log summaries

@@ -40,14 +40,15 @@ class FSVAE(nn.Module):
         #3072
 
         # calculate kl_z
-        q_m,q_v = self.enc(torch.cat((x, y), dim=1))
+        q_m, q_v = self.enc(x, y)
         z_prior_m = self.z_prior_m.view(1, 1).expand(batch, self.z_dim)
         z_prior_v = self.z_prior_v.view(1, 1).expand(batch, self.z_dim)
+
         kl_z = ut.kl_normal(q_m, q_v, z_prior_m, z_prior_v).mean()
 
         # calculate rec
         z = ut.sample_gaussian(q_m,q_v)
-        x_yz_m = self.dec(torch.cat((z, y), dim=1))
+        x_yz_m = self.dec(z, y)
         x_yz_v = torch.full(x_yz_m.shape, 0.1)
         rec = -ut.log_normal(x, x_yz_m, x_yz_v).mean()
 

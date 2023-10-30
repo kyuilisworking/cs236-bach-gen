@@ -71,7 +71,7 @@ class SSVAE(nn.Module):
         kl_z = ut.kl_cat(y_prob, y_logprob, y_log_marginal).mean()
         
         # calculate kl_y
-        q_m, q_v = self.enc(torch.cat((x, y), dim=1))
+        q_m, q_v = self.enc(x, y)
         z_prior_m = self.z_prior_m.view(1, 1).expand(batch * y_dim, z_dim)
         z_prior_v = self.z_prior_v.view(1, 1).expand(batch * y_dim, z_dim)
         kl_y = ut.kl_normal(q_m, q_v, z_prior_m, z_prior_v)
@@ -80,7 +80,7 @@ class SSVAE(nn.Module):
 
         # calculate rec
         z = ut.sample_gaussian(q_m, q_v)
-        logits = self.dec(torch.cat((z, y), dim=1))
+        logits = self.dec(z, y)
         rec = y_prob * ut.log_bernoulli_with_logits(x, logits).reshape(y_dim, batch).transpose(0, 1)
         rec = -torch.sum(rec, dim=1).mean()
 

@@ -106,16 +106,16 @@ class GMVAE(nn.Module):
 
         # calculate log p_theta(x_z)
         logits = self.dec(z)
-        log_prob_x_z = ut.log_bernoulli_with_logits(ut.duplicate(x, iw), logits).reshape(batch, iw)
+        log_prob_x_z = ut.log_bernoulli_with_logits(ut.duplicate(x, iw), logits).reshape(iw, batch).transpose(1, 0)
         
         # calculate log p(z)
         m_mixture, v_mixture = prior
         m_mixture = m_mixture.expand(batch * iw, -1, -1)
         v_mixture = v_mixture.expand(batch * iw, -1, -1)
-        log_prob_z = ut.log_normal_mixture(z, m_mixture, v_mixture).reshape(batch, iw)
+        log_prob_z = ut.log_normal_mixture(z, m_mixture, v_mixture).reshape(iw, batch).transpose(1, 0)
 
         # calculate log q(z|x)
-        log_q_z_x = ut.log_normal(z, q_m, q_v).reshape(batch, iw)
+        log_q_z_x = ut.log_normal(z, q_m, q_v).reshape(iw, batch).transpose(1, 0)
 
         # calculate niwae
         niwae = -ut.log_mean_exp(log_prob_x_z + log_prob_z - log_q_z_x, dim=1).mean()
