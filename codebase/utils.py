@@ -97,9 +97,6 @@ def log_normal_mixture(z, m, v):
     ################################################################################
     d = z.shape[-1]
     two_pi = torch.tensor(2 * np.pi)
-    # print(f'm shape: {m.shape}')
-    # print(f'z shape: {z.unsqueeze(1).shape}')
-    # print(log_mean_exp(torch.sum((z.unsqueeze(1) - m)**2 * v, dim=-1), dim=-1).shape)
     log_prob = -d / 2 * torch.log(two_pi) + log_mean_exp(torch.sum(-torch.log(torch.sqrt(v)) - (z.unsqueeze(1) - m)**2 / (2*v), dim=-1), dim=-1)
     ################################################################################
     # End of code modification

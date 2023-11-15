@@ -74,9 +74,6 @@ def train(model, train_loader, labeled_subset, device, tqdm, writer,
 
                             x_yz_m = model.compute_mean_given(z, y)
 
-                            print(xu.shape)
-                            print(f'z: {z.shape}')
-                            print(f'x_yz_m: {x_yz_m.shape}')
                             clipped_images = torch.clamp(x_yz_m, min=0, max=1)
                             clipped_images = clipped_images.reshape(200, 3, 32, 32).detach().numpy()
                             clipped_images = np.transpose(clipped_images, (0, 2, 3, 1))
