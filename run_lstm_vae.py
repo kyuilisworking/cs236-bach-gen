@@ -51,6 +51,7 @@ dataloader = get_data_loader(
 # Training loop...
 num_epochs = 1000
 iter_save = 1000
+step = 0
 for epoch in range(num_epochs):
     for i, x in enumerate(dataloader):
         x = x.to(device)
@@ -61,9 +62,10 @@ for epoch in range(num_epochs):
         loss.backward()
         optimizer.step()
 
-        if i % 10 == 0:
+        step += 1
+        if step % 10 == 0:
             print(
-                f"Epoch [{epoch+1}/{num_epochs}], Step [{i+1}/{len(dataloader)}], Loss: {loss.item():.4f}"
+                f"Epoch [{epoch+1}/{num_epochs}], Step [{step+1}/{len(dataloader)}], Summary: {summaries}"
             )
-        if i % iter_save == 0:
-            ut.save_model_by_name(model, i)
+        if step % iter_save == 0:
+            ut.save_model_by_name(model, step)
