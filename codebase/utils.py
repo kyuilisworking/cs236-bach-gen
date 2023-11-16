@@ -338,7 +338,8 @@ def reset_weights(m):
     try:
         m.reset_parameters()
     except AttributeError:
-        pass
+        pass    
+    
 
 
 def get_mnist_data(device, use_test_subset=True):
