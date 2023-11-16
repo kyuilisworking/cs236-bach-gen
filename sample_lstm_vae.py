@@ -25,7 +25,9 @@ from codebase.preprocess_data import reconstruct_midi_from_vectors
 import torch.nn.functional as F
 
 parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-parser.add_argument("--checkpoint",  type=int, default=20000, help="Number of training iterations")
+parser.add_argument(
+    "--checkpoint", type=int, default=0, help="Number of training iterations"
+)
 parser.add_argument(
     "--count", type=int, default=200, help="Number of inferences to run"
 )

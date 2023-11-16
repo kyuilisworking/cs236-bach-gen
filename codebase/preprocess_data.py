@@ -273,6 +273,8 @@ def reconstruct_midi_from_vectors(
                     )
                     instrument.notes.append(note)
                     last_note = None
+                current_time += sixteenth_note_duration
+                last_note = None
                 continue
 
             # handle actual note
@@ -309,10 +311,10 @@ def reconstruct_midi_from_vectors(
     reconstructed_midi.write(output_midi_path)
 
 
+# TODO: FIX
 def reconstruct_midi_from_vectors_with_note_off(
     vectorized_tracks, output_midi_path, sixteenth_note_duration
 ):
-    print("hello!")
     # Create a PrettyMIDI object
     reconstructed_midi = pretty_midi.PrettyMIDI()
     # Create an instrument instance (assuming a piano instrument)
@@ -324,13 +326,11 @@ def reconstruct_midi_from_vectors_with_note_off(
     for track in vectorized_tracks:
         last_note = None
         for vector in track:
-            note_on_indices = [i for i, x in enumerate(vector[:129]) if x == 1]
-            print(note_on_indices)
-            print(vector)
-            rest = note_on_indices[128] == 1  # Check if note off event is indicated
+            note_on_indices = [i for i, x in enumerate(vector[:128]) if x == 1]
+            rest = vector[128] == 1  # Check if note off event is indicated
 
             for note_num in note_on_indices:
-                if note_num != last_note or rest:
+                if note_num != last_note or note_off:
                     # End the last note
                     if last_note is not None:
                         end_time = current_time
@@ -342,12 +342,8 @@ def reconstruct_midi_from_vectors_with_note_off(
                         )
                         instrument.notes.append(note)
                     # Start a new note
-                    if not rest:
-                        start_time = current_time
-                        last_note = note_num
-                    else:
-                        last_note = None
-                continue
+                    start_time = current_time
+                    last_note = note_num
 
             # Move to the next time step
             current_time += sixteenth_note_duration
