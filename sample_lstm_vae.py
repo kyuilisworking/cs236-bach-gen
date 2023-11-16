@@ -25,6 +25,7 @@ from codebase.preprocess_data import reconstruct_midi_from_vectors
 import torch.nn.functional as F
 
 parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+parser.add_argument("--checkpoint",  type=int, default=20000, help="Number of training iterations")
 parser.add_argument(
     "--count", type=int, default=200, help="Number of inferences to run"
 )
@@ -67,7 +68,7 @@ lstm_vae = LstmVAE(encoderConfig=encoder_config, decoderConfig=decoder_config).t
 )
 
 # load the model from the check point
-ut.load_model_by_name(lstm_vae, 0, device=device)
+ut.load_model_by_name(lstm_vae, global_step=args.checkpoint, device=device)
 
 # sample z
 z = lstm_vae.sample_z(1)
