@@ -103,11 +103,7 @@ class CategoricalLstmDecoder(nn.Module):
 
         with torch.no_grad():  # Disable gradient computation
             batch_size = z.size(0)
-            h0 = (
-                torch.tanh(self.fc_latent(z))
-                .unsqueeze(0)
-                .repeat(2, 1, self.decoder_rnn.hidden_size)
-            )
+            h0 = torch.tanh(self.fc_latent(z)).unsqueeze(0).repeat(2, 1, 1)
             c0 = torch.zeros_like(h0)
 
             # Start with an initial input (can be a zero vector or any specific starting input)
@@ -125,7 +121,7 @@ class CategoricalLstmDecoder(nn.Module):
                 output, (h0, c0) = self.decoder_rnn(
                     current_input.unsqueeze(1), (h0, c0)
                 )
-                logits = self.fc_out(output.squeeze(1))
+                logits = self.output_layer(output.squeeze(1))
 
                 # Apply temperature scaling
                 scaled_logits = logits / temperature

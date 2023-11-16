@@ -1,9 +1,18 @@
+import torch
 import torch.nn as nn
 import torch.optim as optim
 from codebase.load_data import get_data_loader
 from codebase.models.lstm_vae import LstmVAE
 from codebase.models.nns.params import EncoderConfig, DecoderConfig
 import codebase.utils as ut
+
+device = torch.device(
+    "cuda"
+    if torch.cuda.is_available()
+    else "mps"
+    if torch.backends.mps.is_available()
+    else "cpu"
+)
 
 # Model parameters
 input_dim = 129
@@ -29,6 +38,7 @@ decoder_config = DecoderConfig(
 
 # Create the model
 model = LstmVAE(encoderConfig=encoder_config, decoderConfig=decoder_config)
+model.to(device)
 
 # optimizer
 optimizer = optim.Adam(model.parameters(), lr=0.001)
@@ -43,6 +53,7 @@ num_epochs = 1000
 iter_save = 1000
 for epoch in range(num_epochs):
     for i, x in enumerate(dataloader):
+        x = x.to(device)
         optimizer.zero_grad()
 
         # Forward pass

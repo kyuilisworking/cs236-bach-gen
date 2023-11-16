@@ -2,9 +2,16 @@ import os
 import pretty_midi
 import pickle
 
+
 # Example usage
 # create_preprocessed_dataset('path_to_data_directory', 'path_to_output_file.pkl', override=True)
-def create_preprocessed_dataset(data_dir_path, preprocessed_output_data_path, reconstructed_midi_dir_path, sequence_len=32, override=False):
+def create_preprocessed_dataset(
+    data_dir_path,
+    preprocessed_output_data_path,
+    reconstructed_midi_dir_path,
+    sequence_len=32,
+    override=False,
+):
     print(f"Creating a preprocessed dataset of sequence length {sequence_len}")
     # Check if the output file exists and handle override option
     if os.path.exists(preprocessed_output_data_path):
@@ -21,7 +28,7 @@ def create_preprocessed_dataset(data_dir_path, preprocessed_output_data_path, re
     # Iterate through all MIDI files in the directory
     for filename in os.listdir(data_dir_path):
         print(f"Processing file: {filename}...")
-        if filename.endswith('.mid') or filename.endswith('.midi'):
+        if filename.endswith(".mid") or filename.endswith(".midi"):
             midi_file_path = os.path.join(data_dir_path, filename)
 
             # Process each MIDI file
@@ -34,11 +41,15 @@ def create_preprocessed_dataset(data_dir_path, preprocessed_output_data_path, re
             print(len(all_sequences))
 
             # Reconstruct and save the MIDI file to validate that the preprocessing works
-            reconstructed_midi_path = os.path.join(reconstructed_midi_dir_path, os.path.splitext(filename)[0] + '.mid')
-            reconstruct_midi_from_vectors(vectorized_tracks, reconstructed_midi_path, sixteenth_note_duration)
+            reconstructed_midi_path = os.path.join(
+                reconstructed_midi_dir_path, os.path.splitext(filename)[0] + ".mid"
+            )
+            reconstruct_midi_from_vectors(
+                vectorized_tracks, reconstructed_midi_path, sixteenth_note_duration
+            )
 
     # Write the processed data to the output file
-    with open(preprocessed_output_data_path, 'wb') as file:
+    with open(preprocessed_output_data_path, "wb") as file:
         pickle.dump(all_sequences, file)
 
     print("Preprocessing complete. Data saved to", preprocessed_output_data_path)
@@ -72,7 +83,13 @@ def midi_to_vectors(midi_file_path):
 
             while current_time < midi_data.get_end_time():
                 vector = [0] * 129
-                notes_in_interval = [note for note in instrument.notes if current_time <= note.start < current_time + sixteenth_note_duration]
+                notes_in_interval = [
+                    note
+                    for note in instrument.notes
+                    if current_time
+                    <= note.start
+                    < current_time + sixteenth_note_duration
+                ]
 
                 if notes_in_interval:
                     # This means a new note is played
@@ -127,7 +144,13 @@ def midi_to_vectors_note_off(midi_file_path):
 
             while current_time < midi_data.get_end_time():
                 vector = [0] * 130
-                notes_in_interval = [note for note in instrument.notes if current_time <= note.start < current_time + sixteenth_note_duration]
+                notes_in_interval = [
+                    note
+                    for note in instrument.notes
+                    if current_time
+                    <= note.start
+                    < current_time + sixteenth_note_duration
+                ]
 
                 if notes_in_interval:
                     # This means a new note is played
@@ -135,7 +158,10 @@ def midi_to_vectors_note_off(midi_file_path):
                     vector[earliest_note.pitch] = 1
 
                     # Note off for repeated note
-                    if last_note == earliest_note.pitch and current_time >= last_note_end_time:
+                    if (
+                        last_note == earliest_note.pitch
+                        and current_time >= last_note_end_time
+                    ):
                         vector[128] = 1
 
                     last_note = earliest_note.pitch
@@ -155,6 +181,7 @@ def midi_to_vectors_note_off(midi_file_path):
 
     return tracks_vectors, sixteenth_note_duration
 
+
 # # Example usage
 # # tracks = midi_to_vectors('path_to_your_midi_file.mid')
 # def midi_to_vectors(midi_file_path):
@@ -163,7 +190,7 @@ def midi_to_vectors_note_off(midi_file_path):
 #     except Exception as e:
 #         print(f"Error loading {midi_file_path}: {e}")
 #         return []
-    
+
 #     # Check the time signature
 #     for time_signature in midi_data.time_signature_changes:
 #         if time_signature.numerator not in [2, 4] or time_signature.denominator not in [2, 4]:
@@ -206,6 +233,7 @@ def midi_to_vectors_note_off(midi_file_path):
 
 #     return tracks_vectors
 
+
 # Example usage
 # vectorized_tracks = midi_to_vectors('path_to_your_midi_file.mid')
 # sequences = preprocess_for_ml(vectorized_tracks, sequence_len)
@@ -215,17 +243,22 @@ def preprocess_for_ml(vectorized_tracks, sequence_len):
     for track_vectors in vectorized_tracks:
         # Break each track's vector data into sequences of length sequence_len
         for i in range(0, len(track_vectors), sequence_len):
-            sequence = track_vectors[i:i + sequence_len]
+            sequence = track_vectors[i : i + sequence_len]
             if len(sequence) == sequence_len:
                 processed_sequences.append(sequence)
 
     return processed_sequences
 
-def reconstruct_midi_from_vectors(vectorized_tracks, output_midi_path, sixteenth_note_duration):
+
+def reconstruct_midi_from_vectors(
+    vectorized_tracks, output_midi_path, sixteenth_note_duration
+):
     # Create a PrettyMIDI object
     reconstructed_midi = pretty_midi.PrettyMIDI()
     # Create an instrument instance (assuming a piano instrument)
-    instrument = pretty_midi.Instrument(program=pretty_midi.instrument_name_to_program('Acoustic Grand Piano'))
+    instrument = pretty_midi.Instrument(
+        program=pretty_midi.instrument_name_to_program("Acoustic Grand Piano")
+    )
 
     current_time = 0.0
     for track in vectorized_tracks:
@@ -235,20 +268,27 @@ def reconstruct_midi_from_vectors(vectorized_tracks, output_midi_path, sixteenth
                 # handle rest
                 if last_note is not None:
                     end_time = current_time
-                    note = pretty_midi.Note(velocity=100, pitch=last_note, start=start_time, end=end_time)
+                    note = pretty_midi.Note(
+                        velocity=100, pitch=last_note, start=start_time, end=end_time
+                    )
                     instrument.notes.append(note)
                     last_note = None
                 continue
 
             # handle actual note
             note_on_indices = [i for i, x in enumerate(vector[:128]) if x == 1]
-            
+
             for note_num in note_on_indices:
                 if note_num != last_note:
                     # End the last note
                     if last_note is not None:
                         end_time = current_time
-                        note = pretty_midi.Note(velocity=100, pitch=last_note, start=start_time, end=end_time)
+                        note = pretty_midi.Note(
+                            velocity=100,
+                            pitch=last_note,
+                            start=start_time,
+                            end=end_time,
+                        )
                         instrument.notes.append(note)
                     # Start a new note
                     start_time = current_time
@@ -260,18 +300,24 @@ def reconstruct_midi_from_vectors(vectorized_tracks, output_midi_path, sixteenth
         # End the last note of the track
         if last_note is not None:
             end_time = current_time
-            note = pretty_midi.Note(velocity=100, pitch=last_note, start=start_time, end=end_time)
+            note = pretty_midi.Note(
+                velocity=100, pitch=last_note, start=start_time, end=end_time
+            )
             instrument.notes.append(note)
 
     reconstructed_midi.instruments.append(instrument)
     reconstructed_midi.write(output_midi_path)
 
 
-def reconstruct_midi_from_vectors_with_note_off(vectorized_tracks, output_midi_path, sixteenth_note_duration):
+def reconstruct_midi_from_vectors_with_note_off(
+    vectorized_tracks, output_midi_path, sixteenth_note_duration
+):
     # Create a PrettyMIDI object
     reconstructed_midi = pretty_midi.PrettyMIDI()
     # Create an instrument instance (assuming a piano instrument)
-    instrument = pretty_midi.Instrument(program=pretty_midi.instrument_name_to_program('Acoustic Grand Piano'))
+    instrument = pretty_midi.Instrument(
+        program=pretty_midi.instrument_name_to_program("Acoustic Grand Piano")
+    )
 
     current_time = 0.0
     for track in vectorized_tracks:
@@ -285,7 +331,12 @@ def reconstruct_midi_from_vectors_with_note_off(vectorized_tracks, output_midi_p
                     # End the last note
                     if last_note is not None:
                         end_time = current_time
-                        note = pretty_midi.Note(velocity=100, pitch=last_note, start=start_time, end=end_time)
+                        note = pretty_midi.Note(
+                            velocity=100,
+                            pitch=last_note,
+                            start=start_time,
+                            end=end_time,
+                        )
                         instrument.notes.append(note)
                     # Start a new note
                     start_time = current_time
@@ -297,12 +348,13 @@ def reconstruct_midi_from_vectors_with_note_off(vectorized_tracks, output_midi_p
         # End the last note of the track
         if last_note is not None:
             end_time = current_time
-            note = pretty_midi.Note(velocity=100, pitch=last_note, start=start_time, end=end_time)
+            note = pretty_midi.Note(
+                velocity=100, pitch=last_note, start=start_time, end=end_time
+            )
             instrument.notes.append(note)
 
     reconstructed_midi.instruments.append(instrument)
     reconstructed_midi.write(output_midi_path)
 
 
-
-create_preprocessed_dataset('../data/midi_files', '../data/training_data/32_note_sequences.pkl', '../data/training_data/reconstructed_midi', sequence_len=32, override=False)
+# create_preprocessed_dataset('../data/midi_files', '../data/training_data/32_note_sequences.pkl', '../data/training_data/reconstructed_midi', sequence_len=32, override=False)
