@@ -23,17 +23,24 @@ class BidirectionalLstmEncoder(nn.Module):
             bidirectional=True,
         )
 
-        self.mu = nn.Linear(self.hidden_dim * 2, self.z_dim)
-        self.sigma = nn.Linear(self.hidden_dim * 2, self.z_dim)
+        # self.mu = nn.Linear(self.hidden_dim * 2, self.z_dim)
+        # self.sigma = nn.Linear(self.hidden_dim * 2, self.z_dim)
+        self.enc_out = nn.Linear(self.hidden_dim * 2, self.z_dim * 2)
 
-        nn.init.normal_(self.mu.weight, mean=0, std=0.001)
-        nn.init.normal_(self.sigma.weight, mean=0, std=0.001)
+        # nn.init.normal_(self.mu.weight, mean=0, std=0.001)
+        # nn.init.normal_(self.sigma.weight, mean=0, std=0.001)
 
     def forward(self, x):
-        _, (hidden, _) = self.biLstm(x)
-        final_hidden = torch.cat((hidden[-2, :, :], hidden[-1, :, :]), dim=1)
-        mu = self.mu(final_hidden)
-        sigma = F.softplus(self.sigma(final_hidden))
+        x, _ = self.biLstm(x)  # [batch, seq_len, 2*enc_hidden_dim]
+        # print(x.shape)
+        x = self.enc_out(x)  # [batch, seq_len, 2*z_dim]
+        mu, logvar = torch.chunk(x, 2, dim=-1)
+        logvar = F.softplus(logvar)
+        sigma = torch.exp(logvar * 2)
+
+        # final_hidden = torch.cat((hidden[-2, :, :], hidden[-1, :, :]), dim=1)
+        # mu = self.mu(final_hidden)
+        # sigma = F.softplus(self.sigma(final_hidden))
         return mu, sigma
 
 
@@ -186,31 +193,35 @@ class HierarchicalLstmDecoder(nn.Module):
         self.fc_logits = nn.Linear(config.decoder_hidden_dim, config.vocab_size)
 
     def forward(self, z, x):
-        # z: [batch_size, latent_dim]
+        conductor_input = self.fc_z(z)
+        print(conductor_input.shape)
+        # conductor_input: [batch_size, seq_len, latent_dim]
         batch_size = z.shape[0]
 
         # Prepare the latent vector as the initial state of the conductor
-        conductor_h = torch.tanh(self.fc_z(z)).unsqueeze(0)
-        conductor_c = torch.zeros_like(conductor_h)
+        conductor_h = torch.zeros(1, z.shape[0], self.config.conductor_hidden_dim).to(
+            ut.get_device()
+        )
+        conductor_c = torch.zeros_like(conductor_h).to(ut.get_device())
 
         # Use the conductor to generate num_subsequences embedding vectors
-        conductor_input = torch.zeros(
-            batch_size, 1, self.config.conductor_hidden_dim
-        ).to(ut.get_device())
+        # conductor_input = torch.zeros(
+        #     batch_size, 1, self.config.conductor_hidden_dim
+        # ).to(ut.get_device())
 
         # print(conductor_input.size())
         # print(self.config.conductor_output_dim)
 
         conductor_outputs = []
-        for _ in range(self.config.num_subsequences):
+        for i in range(self.config.num_subsequences):
             conductor_output, (conductor_h, conductor_c) = self.conductor_rnn(
-                conductor_input, (conductor_h, conductor_c)
+                conductor_input[:, i, :].unsqueeze(1), (conductor_h, conductor_c)
             )
             conductor_outputs.append(conductor_output)
-            conductor_input = conductor_output
             # print(conductor_input.size())
 
         conductor_outputs = torch.stack(conductor_outputs, dim=1)
+        print(conductor_outputs.shape)
         conductor_outputs = conductor_outputs.view(
             batch_size * self.config.num_subsequences, -1
         )

@@ -37,7 +37,7 @@ scheduler = optim.lr_scheduler.ReduceLROnPlateau(
 
 # Create the DataLoader
 dataloader = get_data_loader(
-    "data/training_data/polyphonic_data_vqvae.pkl", batch_size=32, shuffle=True
+    "data/training_data/polyphonic_data_vqvae.pkl", batch_size=24, shuffle=True
 )
 
 # Training loop...
@@ -48,7 +48,7 @@ for epoch in range(num_epochs):
     epoch_loss = 0.0
 
     for i, x in enumerate(dataloader):
-        x = x.to(device).view(-1, 4, 88).unsqueeze(1)  # [batch, 1, 4, 88]
+        x = x.to(device).view(-1, 4, 88)  # .unsqueeze(1)  # [batch, 1, 4, 88]
         optimizer.zero_grad()
 
         # Forward pass

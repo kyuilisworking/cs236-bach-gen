@@ -49,6 +49,7 @@ class LstmVAE(nn.Module):
         z = ut.sample_gaussian(q_m, q_v)
         logits = self.dec(z, x)
         logits = logits.reshape(-1, logits.size(-1))
+        print(logits.shape)
 
         target = torch.argmax(x, dim=-1).reshape(-1)
         rec = F.cross_entropy(logits, target)

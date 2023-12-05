@@ -82,26 +82,26 @@ indices = torch.argmax(notes, dim=-1)
 
 for idx, seq in enumerate(notes):
     reconstruct_midi_from_multihot_seq(
-        seq, output_midi_path=f"./samples/vqvae/{idx}.mid", sixteenth_note_duration=0.2
+        seq, output_midi_path=f"./samples/vqvae/{idx}.mid", sixteenth_note_duration=0.15
     )
 
-all_one_hot_embeddings = []
-for i in range(num_embeddings):
-    one_hot = F.one_hot(torch.tensor([i]), num_classes=num_embeddings)
-    all_one_hot_embeddings.append(one_hot)
+# all_one_hot_embeddings = []
+# for i in range(num_embeddings):
+#     one_hot = F.one_hot(torch.tensor([i]), num_classes=num_embeddings)
+#     all_one_hot_embeddings.append(one_hot)
 
-all_one_hot_embeddings = torch.cat(all_one_hot_embeddings, dim=0).to(device).float()
-# print(f"all_one_hot shape: {all_one_hot_embeddings.shape}")
+# all_one_hot_embeddings = torch.cat(all_one_hot_embeddings, dim=0).to(device).float()
+# # print(f"all_one_hot shape: {all_one_hot_embeddings.shape}")
 
-all_embedding_maps = vqvae.embedding_to_notes(all_one_hot_embeddings)
+# all_embedding_maps = vqvae.embedding_to_notes(all_one_hot_embeddings)
 
-for i, notes in enumerate(all_embedding_maps):
-    note_indices = []
-    for note in notes:
-        # print(note)
-        indices = torch.nonzero(note, as_tuple=True)[0]
-        note_indices.append(indices)
-    # Convert indices to a list and print it
-    print(f"Embedding {i}")
-    print(note_indices)
-    # print("\n")
+# for i, notes in enumerate(all_embedding_maps):
+#     note_indices = []
+#     for note in notes:
+#         # print(note)
+#         indices = torch.nonzero(note, as_tuple=True)[0]
+#         note_indices.append(indices)
+#     # Convert indices to a list and print it
+#     print(f"Embedding {i}")
+#     print(note_indices)
+#     # print("\n")

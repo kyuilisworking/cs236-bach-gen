@@ -33,7 +33,7 @@ def create_preprocessed_dataset(
 
         if filename.endswith(".mid") or filename.endswith(".midi"):
             midi_file_path = os.path.join(data_dir_path, filename)
-            multihot_sequences = midi_to_multihot(midi_file_path)
+            multihot_sequences = midi_to_multihot(midi_file_path, no_pauses=True)
 
             if multihot_sequences is None or multihot_sequences.shape[0] == 0:
                 print(f"Processing failed for file: {filename}. Moving on.")
@@ -60,7 +60,16 @@ def create_preprocessed_dataset(
         print(f"Dataset created and saved to {output_data_path}")
 
 
-def midi_to_multihot(filepath):
+def midi_to_pitch_array(filepath, no_pauses=False):
+    """
+    Converts a MIDI track into [size, 256, 4] where 256 represents the
+    number of notes, and 4 represents four potential voices playing at
+    each timestep. If they are not playing, they will have a value of 9
+    and otherwise have a value from 1-88, representing a piano note
+    """
+
+
+def midi_to_multihot(filepath, no_pauses=False):
     # Load the MIDI file
     try:
         midi_data = pretty_midi.PrettyMIDI(filepath)
@@ -123,6 +132,10 @@ def midi_to_multihot(filepath):
             (i for i, vec in enumerate(reversed(note_sequence)) if np.any(vec)), None
         )
 
+        if no_pauses:
+            # Get rid of all pauses in the sequence
+            note_sequence = [v for v in note_sequence if np.any(v)]
+
         if first_non_pause is not None and last_non_pause is not None:
             note_sequence = note_sequence[
                 first_non_pause : len(note_sequence) - last_non_pause
@@ -173,7 +186,7 @@ def contains_long_pause(sequence, max_consec_pause=4):
 
 
 def reconstruct_midi_from_multihot_seq(
-    seq, output_midi_path, sixteenth_note_duration=0.3
+    seq, output_midi_path, sixteenth_note_duration=0.15
 ):
     """
     Reconstruct a MIDI file from a multi-hot encoded sequence.
@@ -220,8 +233,8 @@ def get_reconstruction_path(reconstruction_dir, original_filename, seq_idx):
 
 
 if __name__ == "__main__":
-    data_dir_path = "../data/midi_files"
-    output_data_path = "../data/training_data/polyphonic_data_vqvae.pkl"
+    data_dir_path = "../data/midi_files/piano"
+    output_data_path = "../data/training_data/polyphonic_data_piano_vqvae.pkl"
     reconstructed_midi_dir_path = "../data/training_data/reconstructed_midi_vqvae"
 
     # Call the function with the paths

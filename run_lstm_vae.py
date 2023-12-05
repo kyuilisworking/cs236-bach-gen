@@ -9,7 +9,7 @@ import codebase.utils as ut
 device = ut.get_device()
 
 # Model parameters
-input_dim = 129
+input_dim = 88
 z_dim = 512
 encoder_hidden_dim = 100
 
@@ -18,8 +18,8 @@ conductor_layers = 1
 embedding_dim = 100
 decoder_hidden_dim = 100
 decoder_layers = 1
-num_subsequences = 4
-subsequence_length = 8
+num_subsequences = 16
+subsequence_length = 16
 teacher_force = True
 teacher_force_prop = 1.0
 kl_anneal_epochs = 500  # Number of epochs over which to linearly increase alpha
@@ -53,9 +53,11 @@ model.to(device)
 # optimizer
 optimizer = optim.Adam(model.parameters(), lr=0.001)
 
+batch_size = 32
+
 # Create the DataLoader
 dataloader = get_data_loader(
-    "data/training_data/32_note_sequences_filtered.pkl", batch_size=256, shuffle=True
+    "data/training_data/polyphonic_data_vqvae.pkl", batch_size=batch_size, shuffle=True
 )
 
 # Training loop...
@@ -67,6 +69,8 @@ for epoch in range(num_epochs):
 
     for i, x in enumerate(dataloader):
         x = x.to(device)
+        # print(x.shape)
+        x = x.view(x.shape[0], 256, 88)
         optimizer.zero_grad()
 
         # Forward pass

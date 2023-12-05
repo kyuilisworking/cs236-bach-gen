@@ -22,12 +22,13 @@ class VQVAE(torch.nn.Module):
         nn = getattr(nns, nn)
         self.num_embeddings = num_embeddings
         self.embedding_dim = embedding_dim
-        self.encoder = nn.Encoder(embedding_dim)
         self.quantizer = nn.VectorQuantizerEMA(
             num_embeddings, embedding_dim, commitment_cost, decay
         )
-        self.decoder = nn.Decoder(embedding_dim)
-
+        # self.encoder = nn.EnhancedEncoder(embedding_dim)
+        # self.decoder = nn.EnhancedDecoder(embedding_dim)
+        self.encoder = nn.Encoder1D(embedding_dim)
+        self.decoder = nn.Decoder1D(embedding_dim)
         # Reconstruction loss function
         self.reconstruction_loss_fn = torch.nn.BCEWithLogitsLoss()
 
@@ -48,7 +49,7 @@ class VQVAE(torch.nn.Module):
         decoded, vq_loss = self.forward(x)
 
         # decoded: [batch, 4, 88]
-        decoded = decoded.unsqueeze(1)
+        decoded = decoded  # .unsqueeze(1)
 
         # Calculate reconstruction loss
         reconstruction_loss = self.reconstruction_loss_fn(decoded, x)
@@ -113,13 +114,33 @@ class VQVAE(torch.nn.Module):
         # Pass [batch, embedding_dim] through the decoder
         decoded = self.decoder(embeddings)
 
-        decoded = torch.sigmoid(decoded)
-        one = torch.tensor(1.0).to(ut.get_device())
-        zero = torch.tensor(0.0).to(ut.get_device())
-        decoded = torch.where(decoded > 0.3, one, zero)
+        probs = torch.sigmoid(decoded)
+
+        # Get the indices of the top 2 probabilities in each vector
+        top2_indices = torch.topk(probs, 1, dim=2).indices
+
+        # Create a tensor of zeros with the same shape as 'probabilities'
+        transformed = torch.zeros_like(probs)
+
+        # Set the elements at the top 2 indices to 1
+        for i in range(transformed.size(0)):  # Loop over the batch
+            for j in range(
+                transformed.size(1)
+            ):  # Loop over the second dimension (4 in your case)
+                transformed[i, j, top2_indices[i, j]] = 1
+
+        # print(transformed)
+
+        # print(transformed.shape)
+        # print(top2_indices.shape)
+
+        # one = torch.tensor(1.0).to(ut.get_device())
+        # zero = torch.tensor(0.0).to(ut.get_device())
+        # transformed = torch.where(probs > 0.3, one, zero)
+
         # print("decoded:")
         # print(decoded.shape)
-        return decoded
+        return transformed
 
 
 class AutoregressiveLSTM(torch.nn.Module):

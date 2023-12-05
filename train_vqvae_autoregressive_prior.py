@@ -3,6 +3,7 @@ from torch.utils.data import DataLoader, TensorDataset
 from codebase.models.vqvae import AutoregressiveLSTM
 from codebase import utils as ut
 from codebase.load_data import get_data_loader_input_target
+import argparse
 
 
 # Assuming AutoregressiveLSTM is defined as in your snippet
@@ -30,7 +31,15 @@ def train(model, dataloader, optimizer, epochs):
 
 # Main script
 if __name__ == "__main__":
-    file_path = "./data/training_data/vqvae_lstm_train_400.pkl"
+    parser = argparse.ArgumentParser(
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter
+    )
+    parser.add_argument(
+        "--checkpoint", type=int, default=0, help="VQVAE checkpoint we're using"
+    )
+    args = parser.parse_args()
+
+    file_path = f"./data/training_data/vqvae_lstm_train_{args.checkpoint}.pkl"
     dataloader = get_data_loader_input_target(file_path=file_path, batch_size=256)
 
     config_file_path = "./config.json"  # Replace with your JSON file path

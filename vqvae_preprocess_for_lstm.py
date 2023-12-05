@@ -58,7 +58,7 @@ save_interval = 10  # Number of batches after which to save
 for i, x in enumerate(dataloader):
     with torch.no_grad():
         model.eval()
-        x = x.view(-1, 4, 88).unsqueeze(1).to(device)
+        x = x.view(-1, 4, 88).to(device)  # .unsqueeze(1)
         embeddings_one_hot = model.generate_embeddings_one_hot(
             x
         )  # [batch, num_embeddings]
