@@ -152,69 +152,179 @@ class HierarchicalLstmDecoder(nn.Module):
     def __init__(self, config: DecoderConfig):
         super(HierarchicalLstmDecoder, self).__init__()
 
-        self.num_subsequences = config.num_subsequences
-        self.subsequence_length = config.subsequence_length
+        self.config = config
 
         # Initial fully connected layer for the latent vector
-        self.fc_latent = nn.Linear(config.z_dim, config.conductor_hidden_dim)
+        # TODO: this needs to change if I want to support multilevel conductor LSTMs,
+        # since the hidden state size is multiplied by the number of layers and in the format
+        # (layers, batch, hidden_dim)
+        self.fc_z = nn.Linear(config.z_dim, config.conductor_hidden_dim)
 
         # Conductor RNN
         self.conductor_rnn = nn.LSTM(
             input_size=config.conductor_hidden_dim,
             hidden_size=config.conductor_hidden_dim,
-            num_layers=2,
+            num_layers=config.conductor_layers,
             batch_first=True,
         )
 
-        # Fully connected layer to transform conductor output to decoder initial state
+        # Fully connected layer to transform conductor output to embedding_dim
         self.fc_conductor_output = nn.Linear(
-            config.conductor_hidden_dim, config.conductor_output_dim
+            config.conductor_hidden_dim, config.embedding_dim
         )
 
         # Decoder RNN
         self.decoder_rnn = nn.LSTM(
-            input_size=config.vocab_size + config.conductor_output_dim,
+            input_size=config.vocab_size + config.embedding_dim,
             hidden_size=config.decoder_hidden_dim,
-            num_layers=2,
+            num_layers=config.decoder_layers,
             batch_first=True,
+            dropout=0.5,
         )
 
         # Output layer
-        self.output_layer = nn.Linear(config.decoder_hidden_dim, config.vocab_size)
+        self.fc_logits = nn.Linear(config.decoder_hidden_dim, config.vocab_size)
 
-    def forward(self, z):
+    def forward(self, z, x):
         # z: [batch_size, latent_dim]
+        batch_size = z.shape[0]
 
-        # Prepare the latent vector
-        conductor_init_state = torch.tanh(self.fc_latent(z))
-        conductor_init_state = (
-            conductor_init_state.unsqueeze(0).repeat(2, 1, 1),
-            conductor_init_state.unsqueeze(0).repeat(2, 1, 1),
-        )
+        # Prepare the latent vector as the initial state of the conductor
+        conductor_h = torch.tanh(self.fc_z(z)).unsqueeze(0)
+        conductor_c = torch.zeros_like(conductor_h)
 
-        # Decode each subsequence
-        final_output = []
-        for t in range(self.num_subsequences):
-            embedding, conductor_state = self.conductor_rnn()
-            # Prepare decoder input
-            decoder_input = torch.cat(
-                [
-                    subsequence,
-                    decoder_init_states[:, t, :]
-                    .unsqueeze(1)
-                    .repeat(1, subsequence.size(1), 1),
-                ],
-                dim=-1,
+        # Use the conductor to generate num_subsequences embedding vectors
+        conductor_input = torch.zeros(
+            batch_size, 1, self.config.conductor_hidden_dim
+        ).to(ut.get_device())
+
+        # print(conductor_input.size())
+        # print(self.config.conductor_output_dim)
+
+        conductor_outputs = []
+        for _ in range(self.config.num_subsequences):
+            conductor_output, (conductor_h, conductor_c) = self.conductor_rnn(
+                conductor_input, (conductor_h, conductor_c)
             )
+            conductor_outputs.append(conductor_output)
+            conductor_input = conductor_output
+            # print(conductor_input.size())
 
-            # Generate output for each subsequence
-            output, _ = self.decoder_rnn(decoder_input)
-            output = self.output_layer(output)
-            final_output.append(output)
+        conductor_outputs = torch.stack(conductor_outputs, dim=1)
+        conductor_outputs = conductor_outputs.view(
+            batch_size * self.config.num_subsequences, -1
+        )
+        embeddings = self.fc_conductor_output(conductor_outputs)
+        embeddings = torch.tanh(embeddings)
+        embeddings = embeddings.view(batch_size, self.config.num_subsequences, -1)
+
+        # Decode each subsequence using embeddings
+        logits = []
+        prev_token = torch.zeros(batch_size, 1, self.config.vocab_size).to(
+            ut.get_device()
+        )
+        hidden = (
+            torch.zeros(
+                self.config.decoder_layers, batch_size, self.config.decoder_hidden_dim
+            ).to(ut.get_device()),
+            torch.zeros(
+                self.config.decoder_layers, batch_size, self.config.decoder_hidden_dim
+            ).to(ut.get_device()),
+        )
+        for t in range(self.config.num_subsequences):
+            curr_embedding = embeddings.select(1, t).unsqueeze(1)
+            # print(prev_token.size())
+            # print(curr_embedding.size())
+
+            for n in range(self.config.subsequence_length):
+                augmented_input = torch.cat((prev_token, curr_embedding), dim=-1)
+                output, hidden = self.decoder_rnn(augmented_input, hidden)
+                output = output.squeeze(1)
+                logit = self.fc_logits(output).unsqueeze(1)
+                logits.append(logit)
+
+                if self.config.teacher_force:
+                    curr_note_idx = t * self.config.num_subsequences + n
+                    prev_token = x.select(1, curr_note_idx).unsqueeze(1)
+                else:
+                    prev_token = logit
 
         # Concatenate the outputs to form a continuous sequence
         # final_output shape: [batch_size, num_subsequences * subsequence_length, vocab_size]
-        return torch.cat(final_output, dim=1)
+        return torch.cat(logits, dim=1)
+
+    def sample(self, z, start_token, temperature=1.0):
+        generated_sequence = []
+
+        # z: [batch_size, latent_dim]
+        batch_size = z.shape[0]
+
+        # Prepare the latent vector as the initial state of the conductor
+        conductor_h = torch.tanh(self.fc_z(z)).unsqueeze(0)
+        conductor_c = torch.zeros_like(conductor_h)
+
+        # Use the conductor to generate num_subsequences embedding vectors
+        conductor_input = torch.zeros(
+            batch_size, 1, self.config.conductor_hidden_dim
+        ).to(ut.get_device())
+
+        # print(conductor_input.size())
+        # print(self.config.conductor_output_dim)
+
+        conductor_outputs = []
+        for _ in range(self.config.num_subsequences):
+            conductor_output, (conductor_h, conductor_c) = self.conductor_rnn(
+                conductor_input, (conductor_h, conductor_c)
+            )
+            conductor_outputs.append(conductor_output)
+            conductor_input = conductor_output
+            # print(conductor_input.size())
+
+        conductor_outputs = torch.stack(conductor_outputs, dim=1)
+        conductor_outputs = conductor_outputs.view(
+            batch_size * self.config.num_subsequences, -1
+        )
+        embeddings = self.fc_conductor_output(conductor_outputs)
+        embeddings = torch.tanh(embeddings)
+        embeddings = embeddings.view(batch_size, self.config.num_subsequences, -1)
+
+        # Decode each subsequence using embeddings
+        logits = []
+        prev_token = torch.zeros(batch_size, 1, self.config.vocab_size).to(
+            ut.get_device()
+        )
+        hidden = (
+            torch.zeros(
+                self.config.decoder_layers, batch_size, self.config.decoder_hidden_dim
+            ).to(ut.get_device()),
+            torch.zeros(
+                self.config.decoder_layers, batch_size, self.config.decoder_hidden_dim
+            ).to(ut.get_device()),
+        )
+        for t in range(self.config.num_subsequences):
+            curr_embedding = embeddings.select(1, t).unsqueeze(1)
+            # print(prev_token.size())
+            # print(curr_embedding.size())
+
+            for _ in range(self.config.subsequence_length):
+                augmented_input = torch.cat((prev_token, curr_embedding), dim=-1)
+                output, hidden = self.decoder_rnn(augmented_input, hidden)
+                output = output.squeeze(1)
+                logit = self.fc_logits(output)
+                logit = logit / temperature
+
+                print(logit.size())
+                probabilities = F.softmax(logit, dim=-1)
+                next_token = torch.multinomial(probabilities, 1)
+                generated_sequence.append(next_token)
+                prev_token = F.one_hot(
+                    next_token, num_classes=self.config.vocab_size
+                ).float()
+                print(prev_token.size())
+
+        # Concatenate the outputs to form a continuous sequence
+        # final_output shape: [batch_size, num_subsequences * subsequence_length, vocab_size]
+        return torch.cat(generated_sequence, dim=1)
 
     def sample_x_given(self, z, start_token, temperature=1.0):
         """

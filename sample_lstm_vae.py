@@ -44,25 +44,39 @@ device = torch.device(
     else "cpu"
 )
 
-# Model parameters
 input_dim = 129
 z_dim = 512
-encoder_hidden_dim = 1024
-decoder_hidden_dim = 1024
-num_subsequences = 2
-subsequence_length = 16
+encoder_hidden_dim = 100
+
+# Model parameters
+conductor_hidden_dim = 100
+conductor_layers = 1
+embedding_dim = 100
+decoder_hidden_dim = 100
+decoder_layers = 1
+num_subsequences = 4
+subsequence_length = 8
+teacher_force = True
+teacher_force_prop = 1.0
+kl_anneal_epochs = 200  # Number of epochs over which to linearly increase alpha
+anneal_pct = 0.0  # Starting value for alpha
+anneal_pct_increment = 1.0 / kl_anneal_epochs  # Increment for each epoch
+
 
 encoder_config = EncoderConfig(
     input_dim=input_dim, hidden_dim=encoder_hidden_dim, z_dim=z_dim
 )
 decoder_config = DecoderConfig(
+    decoder_type="hierarchical",
     z_dim=z_dim,
-    conductor_hidden_dim=None,
-    conductor_output_dim=None,
-    vocab_size=input_dim,
+    conductor_hidden_dim=conductor_hidden_dim,
+    conductor_layers=conductor_layers,
+    embedding_dim=embedding_dim,
     decoder_hidden_dim=decoder_hidden_dim,
+    decoder_layers=decoder_layers,
     num_subsequences=num_subsequences,
     subsequence_length=subsequence_length,
+    vocab_size=input_dim,
 )
 
 lstm_vae = LstmVAE(encoderConfig=encoder_config, decoderConfig=decoder_config).to(
@@ -73,8 +87,8 @@ lstm_vae = LstmVAE(encoderConfig=encoder_config, decoderConfig=decoder_config).t
 ut.load_model_by_name(lstm_vae, global_step=args.checkpoint, device=device)
 
 # sample z
-z = lstm_vae.sample_z(1)
-x = lstm_vae.sample_x_given(z, 0.8)
+z = lstm_vae.sample_z(10)
+x = lstm_vae.sample_x_given(z, temperature=0.8)
 one_hot_encoded = F.one_hot(x, num_classes=129)
 
 print(x.shape)
@@ -84,4 +98,4 @@ print(x)
 one_hot_encoded = one_hot_encoded.tolist()
 print(x)
 
-reconstruct_midi_from_vectors(one_hot_encoded, "./samples/sample.mid", 0.20)
+reconstruct_midi_from_vectors(one_hot_encoded, "./samples/sample.mid", 0.15)

@@ -4,6 +4,8 @@ import os
 import shutil
 import sys
 import torch
+import pickle
+import json
 
 # import tensorflow as tf
 from codebase.models.vae import VAE
@@ -429,6 +431,16 @@ class FixedSeed:
         np.random.set_state(self.state)
 
 
+def get_device():
+    return torch.device(
+        "cuda"
+        if torch.cuda.is_available()
+        else "mps"
+        if torch.backends.mps.is_available()
+        else "cpu"
+    )
+
+
 # System verifier
 if sys.version_info[0] < 3:
     raise Exception(
@@ -436,3 +448,28 @@ if sys.version_info[0] < 3:
             sys.version_info[0]
         )
     )
+
+
+def save_data_with_pickle(inputs, targets, save_path):
+    """
+    Appends the inputs and targets to a file using pickle.
+    """
+    data_to_save = {"inputs": inputs, "targets": targets}
+
+    # Check if file exists. If not, create it.
+    if not os.path.isfile(save_path):
+        with open(save_path, "wb") as f:
+            pickle.dump(data_to_save, f)
+
+
+def read_model_config(file_path):
+    """
+    Read model configuration from a JSON file.
+
+    :param file_path: Path to the JSON file containing the model parameters.
+    :return: A dictionary with model parameters.
+    """
+    with open(file_path, "r") as file:
+        config = json.load(file)
+
+    return config

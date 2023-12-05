@@ -22,19 +22,23 @@ class LstmVAE(nn.Module):
         self.encoderConfig = encoderConfig
         self.decoderConfig = decoderConfig
         self.enc = nn.BidirectionalLstmEncoder(encoderConfig)
-        self.dec = nn.CategoricalLstmDecoder(decoderConfig)
+        if decoderConfig.decoder_type == "categorical":
+            self.dec = nn.CategoricalLstmDecoder(decoderConfig)
+        else:
+            self.dec = nn.HierarchicalLstmDecoder(decoderConfig)
 
         # Set prior as fixed parameter attached to Module
         self.z_prior_m = torch.nn.Parameter(torch.zeros(1), requires_grad=False)
         self.z_prior_v = torch.nn.Parameter(torch.ones(1), requires_grad=False)
         self.z_prior = (self.z_prior_m, self.z_prior_v)
 
-    def negative_elbo_bound(self, x):
+    def negative_elbo_bound(self, x, *, anneal_pct):
         """
         Computes the Evidence Lower Bound, KL and, Reconstruction costs
 
         Args:
             x: tensor: (batch, sequence_length, dim): Observations
+            anneal_pct: scalar between 0 and 1, used to anneal the KL divergence
 
         Returns:
             nelbo: tensor: (): Negative evidence lower bound
@@ -43,18 +47,18 @@ class LstmVAE(nn.Module):
         """
         q_m, q_v = self.enc(x)
         z = ut.sample_gaussian(q_m, q_v)
-        logits = self.dec(z)
+        logits = self.dec(z, x)
         logits = logits.reshape(-1, logits.size(-1))
 
         target = torch.argmax(x, dim=-1).reshape(-1)
         rec = F.cross_entropy(logits, target)
         kl = ut.kl_normal(q_m, q_v, self.z_prior_m, self.z_prior_v).mean()
-        nelbo = rec + kl
+        nelbo = rec + anneal_pct * kl
 
         return nelbo, kl, rec
 
-    def loss(self, x):
-        nelbo, kl, rec = self.negative_elbo_bound(x)
+    def loss(self, x, *, anneal_pct=1.0):
+        nelbo, kl, rec = self.negative_elbo_bound(x, anneal_pct=anneal_pct)
         loss = nelbo
 
         summaries = dict(

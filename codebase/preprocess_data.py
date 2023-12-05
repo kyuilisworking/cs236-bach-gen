@@ -1,6 +1,7 @@
 import os
 import pretty_midi
 import pickle
+import pandas as pd
 
 
 # Example usage
@@ -34,23 +35,51 @@ def create_preprocessed_dataset(
             # Process each MIDI file
             vectorized_tracks, sixteenth_note_duration = midi_to_vectors(midi_file_path)
             if len(vectorized_tracks) == 0:
-                print("Processing failed for file: {filename}. Moving on.")
+                print(f"Processing failed for file: {filename}. Moving on.")
                 continue
             sequences = preprocess_for_ml(vectorized_tracks, sequence_len)
+            sequences = filter_out_bad_data(
+                sequences=sequences,
+                max_consec_repeats=4,
+                max_eigth_note_count=2,
+                max_quarter_note_count=1,
+            )
+            print(len(sequences))
+            sequences = get_transpositions(sequences=sequences)
+            print(len(sequences))
             all_sequences.extend(sequences)
             print(len(all_sequences))
+            print(sixteenth_note_duration)
+            # if len(all_sequences) > 0:
+            #     break
 
-            # Reconstruct and save the MIDI file to validate that the preprocessing works
-            reconstructed_midi_path = os.path.join(
-                reconstructed_midi_dir_path, os.path.splitext(filename)[0] + ".mid"
-            )
-            reconstruct_midi_from_vectors(
-                vectorized_tracks, reconstructed_midi_path, sixteenth_note_duration
-            )
+            # # Reconstruct and save the MIDI file to validate that the preprocessing works
+            # reconstructed_midi_path = os.path.join(
+            #     reconstructed_midi_dir_path, os.path.splitext(filename)[0] + ".mid"
+            # )
+            # reconstruct_midi_from_vectors(
+            #     vectorized_tracks, reconstructed_midi_path, sixteenth_note_duration
+            # )
 
     # Write the processed data to the output file
     with open(preprocessed_output_data_path, "wb") as file:
         pickle.dump(all_sequences, file)
+
+    # reconstructed_midi_path = os.path.join(
+    #     reconstructed_midi_dir_path, os.path.splitext(filename)[0] + ".mid"
+    # )
+
+    # save the CSV
+    base_name = os.path.splitext(preprocessed_output_data_path)[0]
+    csv_path_name = f"{base_name}.csv"
+
+    convert_sequences_to_csv(all_sequences, csv_path_name)
+
+    i = 1
+    for sequence in all_sequences:
+        reconstructed_midi_path = os.path.join(reconstructed_midi_dir_path, f"{i}.mid")
+        i += 1
+        reconstruct_midi_from_vectors([sequence], reconstructed_midi_path, 0.1)
 
     print("Preprocessing complete. Data saved to", preprocessed_output_data_path)
 
@@ -64,7 +93,10 @@ def midi_to_vectors(midi_file_path):
 
     # Check the time signature
     for time_signature in midi_data.time_signature_changes:
-        if time_signature.numerator not in [2, 4] or time_signature.denominator != 4:
+        if time_signature.numerator not in [2, 4] or time_signature.denominator not in [
+            2,
+            4,
+        ]:
             return [], None
 
     # Calculate the duration of a 16th note in seconds
@@ -110,6 +142,7 @@ def midi_to_vectors(midi_file_path):
                 current_time += sixteenth_note_duration
 
             tracks_vectors.append(track_vectors)
+        break  # this is to only keep the right hands
 
     return tracks_vectors, sixteenth_note_duration
 
@@ -124,9 +157,9 @@ def midi_to_vectors_note_off(midi_file_path):
         return [], None  # Return an empty list if there's an error loading the file
 
     # Check the time signature
-    for time_signature in midi_data.time_signature_changes:
-        if time_signature.numerator not in [2, 4] or time_signature.denominator != 4:
-            return [], None
+    # for time_signature in midi_data.time_signature_changes:
+    #     if time_signature.numerator not in [2, 4] or time_signature.denominator != 4:
+    #         return [], None
 
     # Calculate the duration of a 16th note in seconds
     tempo = midi_data.estimate_tempo()
@@ -250,6 +283,111 @@ def preprocess_for_ml(vectorized_tracks, sequence_len):
     return processed_sequences
 
 
+def filter_out_bad_data(
+    sequences, max_consec_repeats=4, max_eigth_note_count=6, max_quarter_note_count=2
+):
+    filtered_sequences = filter_super_long_notes(
+        sequences, max_consec_repeats=max_consec_repeats
+    )
+    # filtered_sequences = filter_too_many_eigth_or_quarter_notes(
+    #     filtered_sequences,
+    #     max_eigth_note_count=max_eigth_note_count,
+    #     max_quarter_note_count=max_quarter_note_count,
+    # )
+    return filtered_sequences
+
+
+def filter_super_long_notes(sequences, max_consec_repeats):
+    filtered_sequences = []
+
+    for sequence in sequences:
+        current_note = None
+        consecutive_count = 0
+        should_add = True
+
+        for note in sequence:
+            if note == current_note:
+                consecutive_count += 1
+            else:
+                current_note = note
+                consecutive_count = 1
+
+            if consecutive_count > max_consec_repeats:
+                should_add = False
+                break
+
+        if should_add:
+            filtered_sequences.append(sequence)
+
+    return filtered_sequences
+
+
+def filter_too_many_eigth_or_quarter_notes(
+    sequences, max_eigth_note_count, max_quarter_note_count
+):
+    filtered_sequences = []
+
+    for sequence in sequences:
+        eigth_notes, quarter_notes = count_notes(sequence)
+        if (
+            eigth_notes <= max_eigth_note_count
+            and quarter_notes < max_quarter_note_count
+        ):
+            filtered_sequences.append(sequence)
+
+    return filtered_sequences
+
+
+def get_transpositions(sequences, interval_range=(-6, 6)):
+    transposed_data = []
+    for interval in range(interval_range[0], interval_range[1] + 1):
+        for seq in sequences:
+            new_seq = []
+            for note in seq:
+                if note[128] == 0:  # Check if it's a note
+                    original_pitch = note.index(1)  # Find the current pitch
+                    new_pitch = original_pitch + interval
+
+                    # Handle octave wrapping or limit to MIDI range
+                    new_pitch = max(0, min(new_pitch, 127))
+
+                    # Create a new vector with the transposed note
+                    new_note = [0] * 129
+                    new_note[new_pitch] = 1
+                else:
+                    # If it's a rest, keep the vector unchanged
+                    new_note = note.copy()
+
+                new_seq.append(new_note)
+            transposed_data.append(new_seq)
+    return transposed_data
+
+
+def count_notes(sequence):
+    eighth_notes = 0
+    quarter_notes = 0
+
+    current_note = None
+    consecutive_count = 0
+
+    for note in sequence + [
+        [None]
+    ]:  # Adding a dummy note at the end to trigger the final check
+        if note == current_note:
+            consecutive_count += 1
+        else:
+            # Check for eighth and quarter notes when note changes
+            if consecutive_count == 2:
+                eighth_notes += 1
+            elif consecutive_count == 4:
+                quarter_notes += 1
+
+            current_note = note
+            consecutive_count = 1
+
+    return eighth_notes, quarter_notes
+
+
 def reconstruct_midi_from_vectors(
     vectorized_tracks, output_midi_path, sixteenth_note_duration
 ):
@@ -360,4 +498,36 @@ def reconstruct_midi_from_vectors_with_note_off(
     reconstructed_midi.write(output_midi_path)
 
 
-# create_preprocessed_dataset('../data/midi_files', '../data/training_data/32_note_sequences.pkl', '../data/training_data/reconstructed_midi', sequence_len=32, override=False)
+def convert_sequences_to_csv(sequences, output_file_name):
+    # Function to convert one-hot vector to 1-indexed number
+    def one_hot_to_number(vector):
+        return vector.index(1) + 1
+
+    # Convert each sequence of one-hot vectors to a list of numbers
+    converted_sequences = []
+    for sequence in sequences:
+        converted_sequence = [one_hot_to_number(note) for note in sequence]
+        converted_sequences.append(converted_sequence)
+
+    # Create a DataFrame
+    df = pd.DataFrame(converted_sequences)
+
+    # Export to CSV
+    df.to_csv(output_file_name, index=False)
+
+
+# create_preprocessed_dataset(
+#     data_dir_path="../data/midi_files",
+#     preprocessed_output_data_path="../data/training_data/32_note_sequences.pkl",
+#     reconstructed_midi_dir_path="../data/training_data/reconstructed_midi",
+#     sequence_len=32,
+#     override=False,
+# )
+
+# create_preprocessed_dataset(
+#     data_dir_path="../data/midi_files",
+#     preprocessed_output_data_path="../data/training_data/32_note_sequences_filtered.pkl",
+#     reconstructed_midi_dir_path="../data/training_data/reconstructed_midi_filtered",
+#     sequence_len=32,
+#     override=True,
+# )

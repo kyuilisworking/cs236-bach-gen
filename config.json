@@ -1,0 +1,8 @@
+{
+  "embedding_dim": 128,
+  "num_embeddings": 200,
+  "commitment_cost": 0.25,
+  "decay": 0.99,
+  "lstm_hidden_dim": 2,
+  "lstm_num_layers": 2
+}
