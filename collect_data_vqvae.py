@@ -8,13 +8,16 @@ import json
 # ... [Your existing imports and configurations]
 
 
-def plot_losses(losses, embeddings_values):
+def plot_losses(losses):
     for embedding, loss in losses.items():
         plt.plot(loss, label=f"Embedding {embedding}")
     plt.xlabel("Epoch")
     plt.ylabel("Reconstruction Loss")
     plt.title("Reconstruction Loss for Different Num Embeddings")
     plt.legend()
+
+    # Save the plot to a file
+    plt.savefig("reconstruction_losses_plot.png")
     plt.show()
 
 
@@ -35,20 +38,7 @@ all_losses = {}
 
 batch_size = 32
 
-
-# Create the model
-model = VQVAE(
-    embedding_dim=embedding_dim,
-    num_embeddings=num_embeddings,
-    commitment_cost=commitment_cost,
-    decay=decay,
-)
-
-model.to(device)
-
 # optimizer
-optimizer = optim.Adam(model.parameters(), lr=0.001)
-
 # Initialize the learning rate scheduler
 # scheduler = optim.lr_scheduler.ReduceLROnPlateau(
 #     optimizer, "min", factor=0.5, patience=3, verbose=True
@@ -68,8 +58,10 @@ with open("reconstruction_losses.txt", "w") as file:
             commitment_cost=commitment_cost,
             decay=decay,
         )
+        model.to(device=device)
+        optimizer = optim.Adam(model.parameters(), lr=0.001)
 
-        num_epochs = 1000
+        num_epochs = 10
         iter_save = 10
         step = 0
         losses = []
@@ -110,7 +102,7 @@ with open("reconstruction_losses.txt", "w") as file:
         all_losses[num_embeddings] = losses
 
 
-plot_losses(all_losses, num_embeddings_values)
+plot_losses(all_losses)
 
 # print(f"Epoch loss: {epoch_loss}")
 
