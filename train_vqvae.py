@@ -14,7 +14,7 @@ num_embeddings = config["num_embeddings"]
 commitment_cost = config["commitment_cost"]
 decay = config["decay"]
 
-batch_size = 64
+batch_size = 32
 
 
 # Create the model
@@ -31,9 +31,9 @@ model.to(device)
 optimizer = optim.Adam(model.parameters(), lr=0.001)
 
 # Initialize the learning rate scheduler
-scheduler = optim.lr_scheduler.ReduceLROnPlateau(
-    optimizer, "min", factor=0.5, patience=3, verbose=True
-)
+# scheduler = optim.lr_scheduler.ReduceLROnPlateau(
+#     optimizer, "min", factor=0.5, patience=3, verbose=True
+# )
 
 # Create the DataLoader
 dataloader = get_data_loader(
@@ -64,17 +64,20 @@ for epoch in range(num_epochs):
             print("saving...")
             ut.save_model_by_name(model, step)
 
-        if step % 1 == 0:
-            print(
-                f"Epoch [{epoch+1}/{num_epochs}]\nTotal loss: {total_loss}\n vq_loss: {vq_loss}\n recon_loss: {recon_loss}"
-            )
+        # if step % 1 == 0:
+        #     print(
+        #         f"Epoch [{epoch+1}/{num_epochs}]\nTotal loss: {total_loss}\n vq_loss: {vq_loss}\n recon_loss: {recon_loss}"
+        #     )
 
     # Average loss for the epoch
     epoch_loss /= len(dataloader)
-    print(f"Epoch loss: {epoch_loss}")
+    print(
+        f"Epoch [{epoch+1}/{num_epochs}]\nTotal loss: {total_loss}\n vq_loss: {vq_loss}\n recon_loss: {recon_loss}"
+    )
+    # print(f"Epoch loss: {epoch_loss}")
 
     # Update the learning rate scheduler
-    scheduler.step(epoch_loss)
+    # scheduler.step(epoch_loss)
 
     # print(
     #     f"Epoch [{epoch+1}/{num_epochs}], Step [{step+1}/{len(dataloader)}], Summary: {summaries}"
