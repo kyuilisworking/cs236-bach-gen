@@ -21,10 +21,11 @@ class LstmVAE(nn.Module):
         nn = getattr(nns, nn)
         self.encoderConfig = encoderConfig
         self.decoderConfig = decoderConfig
-        self.enc = nn.BidirectionalLstmEncoder(encoderConfig)
         if decoderConfig.decoder_type == "categorical":
+            self.enc = nn.BidirectionalLstmEncoderCategorical(encoderConfig)
             self.dec = nn.CategoricalLstmDecoder(decoderConfig)
         else:
+            self.enc = nn.BidirectionalLstmEncoderHierarchical(encoderConfig)
             self.dec = nn.HierarchicalLstmDecoder(decoderConfig)
 
         # Set prior as fixed parameter attached to Module
@@ -47,9 +48,13 @@ class LstmVAE(nn.Module):
         """
         q_m, q_v = self.enc(x)
         z = ut.sample_gaussian(q_m, q_v)
-        logits = self.dec(z, x)
+
+        if self.decoderConfig.decoder_type == "categorical":
+            logits = self.dec(z)
+        else:
+            logits = self.dec(z, x)
+
         logits = logits.reshape(-1, logits.size(-1))
-        print(logits.shape)
 
         target = torch.argmax(x, dim=-1).reshape(-1)
         rec = F.cross_entropy(logits, target)

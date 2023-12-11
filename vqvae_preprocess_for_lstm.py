@@ -14,11 +14,6 @@ parser.add_argument(
 
 args = parser.parse_args()
 
-pprint(vars(args))
-print("Model name:", "vqvae")
-
-device = ut.get_device()
-
 # Model parameters
 config_file_path = "config.json"  # Replace with your JSON file path
 config = ut.read_model_config(config_file_path)
@@ -28,6 +23,10 @@ num_embeddings = config["num_embeddings"]
 commitment_cost = config["commitment_cost"]
 decay = config["decay"]
 
+pprint(vars(args))
+print("Model name:", "vqvae")
+
+device = ut.get_device()
 
 # Create the model
 model = VQVAE(
@@ -54,6 +53,9 @@ ut.load_model_by_name(model, global_step=args.checkpoint, device=device)
 input_sequences = []
 targets = []
 save_interval = 10  # Number of batches after which to save
+
+# Initialize the embedding usage counter
+embedding_usage = torch.zeros(num_embeddings, dtype=torch.long).to(device)
 
 for i, x in enumerate(dataloader):
     with torch.no_grad():
@@ -84,6 +86,10 @@ for i, x in enumerate(dataloader):
             input_sequences.append(input_seq)
             targets.append(target_seq)
 
+        # perplexity calculation
+        embedding_usage_batch = embeddings_one_hot.sum(dim=[0, 1]).type(torch.long)
+        embedding_usage += embedding_usage_batch
+
 input_sequences = torch.cat(input_sequences, dim=0)
 targets = torch.cat(targets, dim=0)
 ut.save_data_with_pickle(
@@ -91,3 +97,11 @@ ut.save_data_with_pickle(
     targets,
     f"./data/training_data/vqvae_lstm_train_{args.checkpoint}.pkl",
 )
+
+embedding_probs = embedding_usage.float() / embedding_usage.sum()
+entropy = -torch.sum(
+    embedding_probs * torch.log2(embedding_probs + 1e-9)
+)  # Avoid log(0)
+perplexity = 2**entropy
+
+print("Perplexity:", perplexity.item())

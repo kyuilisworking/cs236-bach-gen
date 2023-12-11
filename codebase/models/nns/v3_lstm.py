@@ -8,7 +8,36 @@ from torch.nn import functional as F
 from codebase.models.nns.params import EncoderConfig, DecoderConfig
 
 
-class BidirectionalLstmEncoder(nn.Module):
+class BidirectionalLstmEncoderCategorical(nn.Module):
+    def __init__(self, inputConfig: EncoderConfig):
+        super().__init__()
+        self.input_dim = inputConfig.input_dim
+        self.hidden_dim = inputConfig.hidden_dim
+        self.z_dim = inputConfig.z_dim
+
+        self.biLstm = nn.LSTM(
+            batch_first=True,
+            input_size=self.input_dim,
+            hidden_size=self.hidden_dim,
+            num_layers=2,
+            bidirectional=True,
+        )
+
+        self.mu = nn.Linear(self.hidden_dim * 2, self.z_dim)
+        self.sigma = nn.Linear(self.hidden_dim * 2, self.z_dim)
+
+        nn.init.normal_(self.mu.weight, mean=0, std=0.001)
+        nn.init.normal_(self.sigma.weight, mean=0, std=0.001)
+
+    def forward(self, x):
+        _, (hidden, _) = self.biLstm(x)
+        final_hidden = torch.cat((hidden[-2, :, :], hidden[-1, :, :]), dim=1)
+        mu = self.mu(final_hidden)
+        sigma = F.softplus(self.sigma(final_hidden))
+        return mu, sigma
+
+
+class BidirectionalLstmEncoderHierarchical(nn.Module):
     def __init__(self, inputConfig: EncoderConfig):
         super().__init__()
         self.input_dim = inputConfig.input_dim
@@ -61,7 +90,7 @@ class CategoricalLstmDecoder(nn.Module):
         self.decoder_rnn = nn.LSTM(
             input_size=config.vocab_size,
             hidden_size=config.decoder_hidden_dim,
-            num_layers=2,
+            num_layers=1,
             batch_first=True,
         )
 
@@ -73,7 +102,7 @@ class CategoricalLstmDecoder(nn.Module):
 
         # Initialize the hidden state and cell state for LSTM
         # Process z through the fully connected layer and tanh activation
-        h0 = torch.tanh(self.fc_latent(z)).unsqueeze(0).repeat(2, 1, 1)
+        h0 = torch.tanh(self.fc_latent(z)).unsqueeze(0)
         c0 = torch.zeros_like(h0)
 
         # Prepare the initial input token
@@ -199,9 +228,10 @@ class HierarchicalLstmDecoder(nn.Module):
         batch_size = z.shape[0]
 
         # Prepare the latent vector as the initial state of the conductor
-        conductor_h = torch.zeros(1, z.shape[0], self.config.conductor_hidden_dim).to(
-            ut.get_device()
-        )
+        # conductor_h = torch.zeros(1, z.shape[0], self.config.conductor_hidden_dim).to(
+        #     ut.get_device()
+        # )
+        conductor_h = conductor_input.unsqueeze(0)
         conductor_c = torch.zeros_like(conductor_h).to(ut.get_device())
 
         # Use the conductor to generate num_subsequences embedding vectors

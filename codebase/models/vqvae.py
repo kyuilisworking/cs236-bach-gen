@@ -18,7 +18,7 @@ class VQVAE(torch.nn.Module):
         name="vqvae",
     ):
         super(VQVAE, self).__init__()
-        self.name = name
+        self.name = name + "-" + str(num_embeddings)
         nn = getattr(nns, nn)
         self.num_embeddings = num_embeddings
         self.embedding_dim = embedding_dim
@@ -116,18 +116,42 @@ class VQVAE(torch.nn.Module):
 
         probs = torch.sigmoid(decoded)
 
-        # Get the indices of the top 2 probabilities in each vector
-        top2_indices = torch.topk(probs, 1, dim=2).indices
+        top2 = torch.topk(probs, 2, dim=2)
+        top2_indices = top2.indices
+        top2_values = top2.values
+        print(top2_values)
+        print(top2_indices)
 
-        # Create a tensor of zeros with the same shape as 'probabilities'
+        # Create a tensor of zeros with the same shape as 'probs'
         transformed = torch.zeros_like(probs)
 
-        # Set the elements at the top 2 indices to 1
+        # Define the threshold for "roughly the same"
+        threshold_ratio = (
+            0.95  # e.g., second probability should be at least 90% of the first
+        )
+
+        # Apply the logic
         for i in range(transformed.size(0)):  # Loop over the batch
-            for j in range(
-                transformed.size(1)
-            ):  # Loop over the second dimension (4 in your case)
-                transformed[i, j, top2_indices[i, j]] = 1
+            for j in range(transformed.size(1)):  # Loop over the second dimension
+                # Always set the highest probability index to 1
+                transformed[i, j, top2_indices[i, j, 0]] = 1
+
+                # Set the second highest index to 1 only if it's within the threshold
+                if top2_values[i, j, 1] >= threshold_ratio * top2_values[i, j, 0]:
+                    transformed[i, j, top2_indices[i, j, 1]] = 1
+
+        # Get the indices of the top 2 probabilities in each vector
+        # top2_indices = torch.topk(probs, 2, dim=2).indices
+
+        # # Create a tensor of zeros with the same shape as 'probabilities'
+        # transformed = torch.zeros_like(probs)
+
+        # # Set the elements at the top 2 indices to 1
+        # for i in range(transformed.size(0)):  # Loop over the batch
+        #     for j in range(
+        #         transformed.size(1)
+        #     ):  # Loop over the second dimension (4 in your case)
+        #         transformed[i, j, top2_indices[i, j]] = 1
 
         # print(transformed)
 
